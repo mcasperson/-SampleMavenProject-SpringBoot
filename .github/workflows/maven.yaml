@@ -28,7 +28,7 @@ jobs:
       with:
         additionalArguments: /overrideconfig mode=Mainline
     - name: Install Octopus Deploy CLI
-      uses: OctopusDeploy/install-octocli@v1.1.1
+      uses: OctopusDeploy/install-octopus-cli-action@v1
       with:
         version: latest
     - name: Set up JDK 1.17
@@ -37,10 +37,10 @@ jobs:
         java-version: '17'
         distribution: adopt
     - name: Set Version
-      run: ./mvnw --batch-mode versions:set -DnewVersion=${{ steps.determine_version.outputs.semVer }}
+      run: mvn --batch-mode versions:set -DnewVersion=${{ steps.determine_version.outputs.semVer }}
       shell: bash
     - name: List Dependencies
-      run: ./mvnw --batch-mode dependency:tree --no-transfer-progress > dependencies.txt
+      run: mvn --batch-mode dependency:tree --no-transfer-progress > dependencies.txt
       shell: bash
     - name: Collect Dependencies
       uses: actions/upload-artifact@v2
@@ -48,7 +48,7 @@ jobs:
         name: Dependencies
         path: dependencies.txt
     - name: List Dependency Updates
-      run: ./mvnw --batch-mode versions:display-dependency-updates > dependencyUpdates.txt
+      run: mvn --batch-mode versions:display-dependency-updates > dependencyUpdates.txt
       shell: bash
     - name: Collect Dependency Updates
       uses: actions/upload-artifact@v2
@@ -56,7 +56,7 @@ jobs:
         name: Dependencies Updates
         path: dependencyUpdates.txt
     - name: Test
-      run: ./mvnw --batch-mode -Dmaven.test.failure.ignore=true test
+      run: mvn --batch-mode test
       shell: bash
     - if: always()
       name: Report
@@ -67,7 +67,7 @@ jobs:
         reporter: java-junit
         fail-on-error: 'false'
     - name: Package
-      run: ./mvnw --batch-mode -DskipTests=true package
+      run: mvn --batch-mode -DskipTests=true package
       shell: bash
     - id: get_artifact
       name: Get Artifact Path
@@ -120,23 +120,23 @@ jobs:
         echo "::set-output name=octoversion::${octoversion}"
         ls -la
       shell: bash
-    - name: Push to Octopus
-      uses: OctopusDeploy/push-package-action@v1.1.1
+    - env:
+        OCTOPUS_API_KEY: ${{ secrets.OCTOPUS_API_TOKEN }}
+        OCTOPUS_HOST: ${{ secrets.OCTOPUS_SERVER_URL }}
+      name: Push packages to Octopus Deploy
+      uses: OctopusDeploy/push-package-action@v2
       with:
-        api_key: ${{ secrets.OCTOPUS_API_TOKEN }}
         packages: ${{ steps.get_octopus_artifact.outputs.artifact }}
-        server: ${{ secrets.OCTOPUS_SERVER_URL }}
         overwrite_mode: OverwriteExisting
-    - name: Generate Octopus Deploy build information
-      uses: xo-energy/action-octopus-build-information@v1.1.2
+    - env:
+        OCTOPUS_API_KEY: ${{ secrets.OCTOPUS_API_TOKEN }}
+        OCTOPUS_HOST: ${{ secrets.OCTOPUS_SERVER_URL }}
+      name: Generate Octopus Deploy build information
+      uses: OctopusDeploy/push-build-information-action@v1
       with:
-        octopus_api_key: ${{ secrets.OCTOPUS_API_TOKEN }}
-        octopus_project: SampleMavenProject-SpringBoot
-        octopus_server: ${{ secrets.OCTOPUS_SERVER_URL }}
-        push_version: ${{ steps.determine_version.outputs.semVer }}
-        push_package_ids: SampleMavenProject-SpringBoot
-        push_overwrite_mode: OverwriteExisting
-        output_path: octopus
+        version: ${{ steps.determine_version.outputs.semVer }}
+        packages: SampleMavenProject-SpringBoot
+        overwrite_mode: OverwriteExisting
     - name: Create Octopus Release
       uses: OctopusDeploy/create-release-action@v1.1.1
       with:
